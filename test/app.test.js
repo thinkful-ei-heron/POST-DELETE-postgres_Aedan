@@ -63,7 +63,7 @@ describe('/bookmarks routes', () => {
                 .get('/bookmarks/invalid')
                 .set('Authorization', `Bearer ${API_TOKEN}`)
                 .expect('Content-Type', /json/)
-                .expect(400, { message: 'Must provide a valid UUID ex: .../bookmarks/<uuid>' });
+                .expect(400, { message: 'Must provide a valid ID to get' });
         });
 
         context('bookmarks has data', () => {
@@ -99,52 +99,101 @@ describe('/bookmarks routes', () => {
     });
 
 
-    
-    
+    describe('POST /bookmarks route', () => {
+        it('POST /bookmarks posts properly given correct info. (FULL INTEGRATION TEST)', () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .set('Content-Type', 'application/json')
+                .send({ title: 'Post test', urls: 'http://postTest.com', rating: 5, descr: 'desc post test' })
+                .expect(201)
+                .then(res => {
+                    expect(res.body).to.be.an('Object');
+                    expect(res.body).to.have.all.keys('id', 'urls', 'title', 'descr', 'rating');
+                    expect(res.headers).to.have.property('location');
+
+                    let dataBaseConfirmation = db.select('*').from('bookmarks').where('id', res.body.id).first();
+                    dataBaseConfirmation.then(resp => {
+                        expect(resp).to.eql({ id: res.body.id, title: 'Post test', urls: 'http://postTest.com', rating: 5, descr: 'desc post test' });
+                    });
+                });
+        });
+        it('POST /bookmarks posts properly even if descr is not provided.', () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .set('Content-Type', 'application/json')
+                .send({ title: 'Post test', urls: 'http://postTest.com', rating: 4 })
+                .expect(201)
+                .then(res => {
+                    expect(res.body).to.be.an('Object');
+                    expect(res.body).to.have.all.keys('id', 'urls', 'title', 'descr', 'rating');
+                    expect(res.headers).to.have.property('location');
+                });
+        });
+        it('POST /bookmarks returns a 400 error if title is not provided', () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .set('Content-Type', 'application/json')
+                .send({ url: 'http://postTest.com', rating: 5 })
+                .expect(400, { message: 'Must provide title.' });
+        });
+        it('POST /bookmarks returns a 400 error if url is not provided', () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .set('Content-Type', 'application/json')
+                .send({ title: 'Post test', rating: 5 })
+                .expect(400, { message: 'Must provide url.' });
+        });
+        it('POST /bookmarks returns a 400 error if rating is not provided', () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .set('Content-Type', 'application/json')
+                .send({ title: 'Post test', urls: 'http://postTest.com' })
+                .expect(400, { message: 'Must provide rating.' });
+        });
+    });
 
 
-    // it('POST /bookmarks posts properly given correct info.', () => {
-    //     return supertest(app)
-    //         .post('/bookmarks')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .set('Content-Type', 'application/json')
-    //         .send({ title: 'Post test', url: 'http://postTest.com', rating: 5, desc: 'desc post test' })
-    //         .expect(201)
-    //         .then(res => {
-    //             expect(res.body).to.be.an('Object');
-    //             expect(res.body).to.have.all.keys('id', 'url', 'title', 'desc', 'rating');
-    //             expect(res.headers).to.have.property('location');
-    //         });
-    // });
-    // it('POST /bookmarks posts properly even if desc or rating are not provided.', () => {
-    //     return supertest(app)
-    //         .post('/bookmarks')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .set('Content-Type', 'application/json')
-    //         .send({ title: 'Post test', url: 'http://postTest.com' })
-    //         .expect(201)
-    //         .then(res => {
-    //             expect(res.body).to.be.an('Object');
-    //             expect(res.body).to.have.all.keys('id', 'url', 'title');
-    //             expect(res.headers).to.have.property('location');
-    //         });
-    // });
-    // it('POST /bookmarks returns a 400 error if title is not provided', () => {
-    //     return supertest(app)
-    //         .post('/bookmarks')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .set('Content-Type', 'application/json')
-    //         .send({ url: 'http://postTest.com' })
-    //         .expect(400, { message: 'Must provide title.' });
-    // });
-    // it('POST /bookmarks returns a 400 error if url is not provided', () => {
-    //     return supertest(app)
-    //         .post('/bookmarks')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .set('Content-Type', 'application/json')
-    //         .send({ title: 'Post test' })
-    //         .expect(400, { message: 'Must provide url.' });
-    // });
+    describe('DELETE /bookmarks/:id route', () => {
+        it('returns 400 if invalid id provided', () => {
+            return supertest(app)
+                .delete('/bookmarks/invalid')
+                .set('Authorization', `Bearer ${API_TOKEN}`)
+                .expect(400, { message: 'Must provide a valid ID to delete.' });
+        });
+        context('bookmarks has info', () => {
+            beforeEach(() => {
+                return db.into('bookmarks')
+                    .insert(testData);
+            });
+            it('DELETE /bookmarks/:id returns 204 if sucessfully deleted (FULL INTEGRATION TEST)', () => {
+                return supertest(app)
+                    .delete('/bookmarks/4e8f0287-8968-442e-b589-f28b6c153121')
+                    .set('Authorization', `Bearer ${API_TOKEN}`)
+                    .expect(204)
+                    .then(() => {
+
+                        //checking to see if it actually was deleted.
+                        let dataBaseConfirmation = db.select('*').from('bookmarks').where('id', '4e8f0287-8968-442e-b589-f28b6c153121');
+                        dataBaseConfirmation.then(resp => {
+                            expect(resp).to.eql([]);
+                        });
+                    });
+            });
+            it('returns 404 if no such bookmark', () => {
+                return supertest(app)
+                    .delete('/bookmarks/4e8f0287-8968-442e-b589-f28b6c159999')
+                    .set('Authorization', `Bearer ${API_TOKEN}`)
+                    .expect(404, { message: 'No such bookmark exists.' });
+            });
+        });
+    });
+
+
 
 
     // it('PATCH /bookmarks/:id returns 200 if sucessfully updated', () => {
@@ -172,16 +221,5 @@ describe('/bookmarks routes', () => {
     // });
 
 
-    // it('DELETE /bookmarks/:id returns 200 if sucessfully deleted', () => {
-    //     return supertest(app)
-    //         .delete('/bookmarks/1234')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .expect(200, {});
-    // });
-    // it('DELETE /bookmarks/:id returns 404 if no such bookmark', () => {
-    //     return supertest(app)
-    //         .delete('/bookmarks/invalid')
-    //         .set('Authorization', `Bearer ${API_TOKEN}`)
-    //         .expect(404, { message: 'No such bookmark exists.' });
-    // });
+
 });
